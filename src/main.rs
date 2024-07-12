@@ -79,7 +79,6 @@ fn setup(mut commands: Commands,
     // faces [90, 91, 92, 93, 94, 95, 96, 97, 98, 99]
     // `jq '.faces|length' hexsphere_r10_d0.json` was 12? cells: 120, pos: 360
     let json_data: serde_json::Value = serde_json::from_str(&data).expect("Unable to parse");
-    // let person: JasonPolyhedron = serde_json::from_str(&data).expect("JSON was not well-formatted");
 
     println!("{:?}", json_data);
     println!("Please call {} at the number {}", json_data["positions"][0][0], json_data["normals"][0][2]);
@@ -97,29 +96,26 @@ fn setup(mut commands: Commands,
 
     let nor = json_data["normals"].as_array().expect("Should be array");
     let normals: Vec<Vec3> = nor.iter().map(|vec| Vec3::new(vec[0].as_f64().unwrap() as f32, vec[1].as_f64().unwrap() as f32, vec[2].as_f64().unwrap() as f32)).collect();
-    // let normals: Vec<Vec<f32>> = nor.iter().map(|vec| vec![vec[0].as_f64().unwrap() as f32, vec[1].as_f64().unwrap() as f32, vec[2].as_f64().unwrap() as f32]).collect();
-    println!("Normals: {:?}", normals[0]);
 
     let ind = json_data["cells"].as_array().expect("Should be array");
     let indices: Vec<u32> = ind.iter().map(|vec| vec![vec[0].as_f64().unwrap() as u32, vec[1].as_f64().unwrap() as u32, vec[2].as_f64().unwrap() as u32]).flatten().collect();
     println!("indices: {:?}", indices[0]);
-
     println!("\nCreate the mesh");
 
     // spawn mesh from icosahedron
-    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD)
+    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD);
 
-    // // // mesh.set_indices(Some(Indices::U32(indices))); // was bevy 12.1
+    // mesh.set_indices(Some(Indices::U32(indices))); // was bevy 12.1
     mesh.insert_indices(Indices::U32(indices)); // 13.2
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, posses);
     let mesh_handle = meshes.add(mesh);
 
-    let mut cmd = commands.spawn(PbrBundle {
-        mesh: mesh_handle.clone(),
-        material: materials.add(Color::BISQUE),
-        transform: Transform::from_translation(Vec3::ZERO),
-        ..Default::default()
-    });
+    // let mut cmd = commands.spawn(PbrBundle {
+    //     mesh: mesh_handle.clone(),
+    //     material: materials.add(Color::BISQUE),
+    //     transform: Transform::from_translation(Vec3::ZERO),
+    //     ..Default::default()
+    // });
 
     // Hexasphere rust crate
     println!("\n\n ____________________________________\nTest out the hexasphere crate\n____________________________________");
@@ -127,7 +123,7 @@ fn setup(mut commands: Commands,
     // At 12 subdivisions. Points: 1692, indices: 10_140
     // At 1 subdivisions. Points: 42, indices: 240
     // At 0 subdivisions. Points: 12, indices: 60  is a D12. 60 indices are 12 sides * 5 points each
-    let sphere = IcoSphere::new(6, |_| ());
+    let sphere = IcoSphere::new(5, |_| ());
     // adjacency allows the user to create neighbour maps from the indices provided by the Subdivided struct
 
     let indices = sphere.get_all_indices();
@@ -206,10 +202,10 @@ fn setup(mut commands: Commands,
             // println!("points[0] from vec_points: {:?}", vec_points[x[0]]);
             let my_points = vec![vec_points[x[0]], vec_points[x[1]], vec_points[x[2]], vec_points[x[3]], vec_points[x[4]]];
 
-            let center: Vec3 = my_points
+            let mut center: Vec3 = my_points
                 .iter()
-                .fold(Vec3::ZERO, |sum, i| sum + *i) / 5;
-            //.map(jason).map(|x| x / 5).collect(); //(point1 + point2 + point3) / 3.0;
+                .fold(Vec3::ZERO, |sum, i| sum + *i) / 5.0;
+            //.map(jason).map(|x| x / 5).collect(); // (point1 + point2 + point3) / 3.0;
             println!("my points; {:?}", my_points);
             println!("center; {:?}", center);
             mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, my_points);
@@ -237,7 +233,7 @@ fn setup(mut commands: Commands,
             println!("my points; {:?}", my_points);
             let center: Vec3 = my_points
                 .iter()
-                .fold(Vec3::ZERO, |sum, i| sum + *i).div(6.0);
+                .fold(Vec3::ZERO, |sum, i| sum + *i) / 6.0;
             println!("Center is {center}");
             mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, my_points);
 
@@ -251,7 +247,6 @@ fn setup(mut commands: Commands,
 
             let mesh_handle = meshes.add(mesh);
             let random = &ranr.gen_range(0..4);
-            // println!("random number is {random}");
             let col = match random {
                 0 => Color::PINK,
                 1 => Color::ORANGE_RED,
@@ -269,103 +264,14 @@ fn setup(mut commands: Commands,
             // break;
         }
     }
-
-    // Spawn entire mesh as 1 entity
-    // let mut cmd = commands.spawn(PbrBundle {
-    //     mesh: mesh_handle.clone(),
-    //     material: materials.add(Color::rgb(0.698, 0.941, 0.329)),
-    //     transform: Transform::from_translation(Vec3::ZERO),s
-    //     ..Default::default()
-    // });
 }
 
-fn write_to_json_file(polyhedron: JasonPolyhedron, path: &Path) {
+fn write_to_json_file(polyhedron: Polyhedron, path: &Path) {
     let mut json_file = File::create(path).expect("Can't create file");
     let json = serde_json::to_string(&polyhedron).expect("Problem serializing");
     json_file
         .write_all(json.as_bytes())
         .expect("Can't write to file");
-}
-
-
-#[derive(Debug)]
-pub struct JasonTriangle {
-    // We use usize for the three points of the triangle because 
-    // they are indices into a Vec of Vector3s.
-    pub a: usize,
-    pub b: usize,
-    pub c: usize,
-}
-
-impl JasonTriangle {
-    fn new(a: usize, b: usize, c: usize) -> JasonTriangle {
-        JasonTriangle { a, b, c }
-    }
-}
-
-impl Serialize for JasonTriangle {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
-    {
-        let vec_indices = vec![self.a, self.b, self.c];
-        let mut seq = serializer.serialize_seq(Some(vec_indices.len()))?;
-        for index in vec_indices {
-            seq.serialize_element(&index)?;
-        }
-        seq.end()
-    }
-}
-
-#[derive(Debug, Serialize)]
-pub struct JasonPolyhedron {
-    pub positions: Vec<Vec3>,
-    pub cells: Vec<JasonTriangle>,
-}
-
-impl JasonPolyhedron {
-    pub fn regular_isocahedron() -> JasonPolyhedron {
-        let t = (1.0 + (5.0 as f32).sqrt()) / 2.0; // 1.618034
-        println!("t is: {t}");
-        JasonPolyhedron {
-            positions: vec![
-                Vec3::new(-1.0, t, 0.0),
-                Vec3::new(1.0, t, 0.0),
-                Vec3::new(-1.0, -t, 0.0),
-                Vec3::new(1.0, -t, 0.0),
-                Vec3::new(0.0, -1.0, t),
-                Vec3::new(0.0, 1.0, t),
-                Vec3::new(0.0, -1.0, -t),
-                Vec3::new(0.0, 1.0, -t),
-                Vec3::new(t, 0.0, -1.0),
-                Vec3::new(t, 0.0, 1.0),
-                Vec3::new(-t, 0.0, -1.0),
-                Vec3::new(-t, 0.0, 1.0),
-            ],
-            cells: vec![
-                JasonTriangle::new(0, 11, 5),
-                JasonTriangle::new(0, 5, 1),
-                JasonTriangle::new(0, 1, 7),
-                JasonTriangle::new(0, 7, 10),
-                JasonTriangle::new(0, 10, 11),
-                JasonTriangle::new(1, 5, 9),
-                JasonTriangle::new(5, 11, 4),
-                JasonTriangle::new(11, 10, 2),
-                JasonTriangle::new(10, 7, 6),
-                JasonTriangle::new(7, 1, 8),
-                JasonTriangle::new(3, 9, 4),
-                JasonTriangle::new(3, 4, 2),
-                JasonTriangle::new(3, 2, 6),
-                JasonTriangle::new(3, 6, 8),
-                JasonTriangle::new(3, 8, 9),
-                JasonTriangle::new(4, 9, 5),
-                JasonTriangle::new(2, 4, 11),
-                JasonTriangle::new(6, 2, 10),
-                JasonTriangle::new(8, 6, 7),
-                JasonTriangle::new(9, 8, 1),
-            ],
-        }
-    }
 }
 
 /// Move the camera around with the keyboard
