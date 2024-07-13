@@ -254,6 +254,12 @@ fn setup(mut commands: Commands,
                 3 => Color::LIME_GREEN,
                 _ => Color::BISQUE,
             };
+            // Truly random rainbow colors.
+            let col = Color::rgb(
+                ranr.gen_range(0.0..1.0),
+                ranr.gen_range(0.0..1.0),
+                ranr.gen_range(0.0..1.0),
+            );
 
             let mut cmd = commands.spawn(PbrBundle {
                 mesh: mesh_handle.clone(),
