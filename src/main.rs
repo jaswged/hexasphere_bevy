@@ -67,7 +67,8 @@ fn setup(mut commands: Commands,
 
     // From icosahedron github
     println!("Read in our json file");
-    let mut file = File::open("hexsphere_r10_d2.json").expect("file should open read only");
+    let mut file = File::open("unity.json").expect("file should open read only");
+    // let mut file = File::open("hexsphere_r10_d2.json").expect("file should open read only");
     let mut data = String::new();
     file.read_to_string(&mut data).unwrap();
 
@@ -80,42 +81,60 @@ fn setup(mut commands: Commands,
     // `jq '.faces|length' hexsphere_r10_d0.json` was 12? cells: 120, pos: 360
     let json_data: serde_json::Value = serde_json::from_str(&data).expect("Unable to parse");
 
-    println!("{:?}", json_data);
-    println!("Please call {} at the number {}", json_data["positions"][0][0], json_data["normals"][0][2]);
+    // println!("{:?}", json_data);
+    // println!("Please call {} at the number {}", json_data["positions"][0][0], json_data["normals"][0][2]);
+    println!("Please call {} at the number {}", json_data["vertices"][0], json_data["triangles"][0]);
 
-    let positions = json_data["positions"].as_array().expect("Should be array");
+    // let positions = json_data["positions"].as_array().expect("Should be array");
+    let positions = json_data["vertices"].as_array().expect("Should be array");
     let positions_vec: Vec<Vec<f32>> = positions
         .iter()
-        .map(|vec| vec![
-            vec[0].as_f64().unwrap() as f32,
-            vec[1].as_f64().unwrap() as f32,
-            vec[2].as_f64().unwrap() as f32])
+        .map(|vec| {
+            let y = vec["x"].clone().as_f64().unwrap() as f32;
+            vec![
+                vec["x"].clone().as_f64().unwrap() as f32,
+                vec["y"].clone().as_f64().unwrap() as f32,
+                vec["z"].clone().as_f64().unwrap() as f32,
+            ]
+        })
         .collect();
-    let posses: Vec<Vec3> = positions.iter().map(|vec| Vec3::new(vec[0].as_f64().unwrap() as f32, vec[1].as_f64().unwrap() as f32, vec[2].as_f64().unwrap() as f32)).collect();;
-    println!("Poss: {:?}", positions_vec[0]);
-
-    let nor = json_data["normals"].as_array().expect("Should be array");
-    let normals: Vec<Vec3> = nor.iter().map(|vec| Vec3::new(vec[0].as_f64().unwrap() as f32, vec[1].as_f64().unwrap() as f32, vec[2].as_f64().unwrap() as f32)).collect();
-
-    let ind = json_data["cells"].as_array().expect("Should be array");
-    let indices: Vec<u32> = ind.iter().map(|vec| vec![vec[0].as_f64().unwrap() as u32, vec[1].as_f64().unwrap() as u32, vec[2].as_f64().unwrap() as u32]).flatten().collect();
-    println!("indices: {:?}", indices[0]);
-    println!("\nCreate the mesh");
-
-    // spawn mesh from icosahedron
+    // let positions_vec: Vec<Vec<f32>> = positions
+    //     .iter()
+    //     .map(|vec| vec![
+    //         vec[0].as_f64().unwrap() as f32,
+    //         vec[1].as_f64().unwrap() as f32,
+    //         vec[2].as_f64().unwrap() as f32])
+    //     .collect();
+    // let posses: Vec<Vec3> = positions.iter().map(|vec| Vec3::new(vec[0].as_f64().unwrap() as f32, vec[1].as_f64().unwrap() as f32, vec[2].as_f64().unwrap() as f32)).collect();
+    let posses: Vec<Vec3> = positions.iter().map(|vec| Vec3::new(vec["x"].as_f64().unwrap() as f32, vec["y"].as_f64().unwrap() as f32, vec["z"].as_f64().unwrap() as f32)).collect();
+    // println!("Poss: {:?}", positions_vec[0]);
+    //
+    // let nor = json_data["normals"].as_array().expect("Should be array");
+    // let normals: Vec<Vec3> = nor.iter().map(|vec| Vec3::new(vec[0].as_f64().unwrap() as f32, vec[1].as_f64().unwrap() as f32, vec[2].as_f64().unwrap() as f32)).collect();
+    //
+    // let ind = json_data["cells"].as_array().expect("Should be array");
+    let ind = json_data["triangles"].as_array().expect("Should be array");
+    // let indices: Vec<u32> = ind.iter().map(|vec| vec![vec[0].as_f64().unwrap() as u32, vec[1].as_f64().unwrap() as u32, vec[2].as_f64().unwrap() as u32]).flatten().collect();
+    let indices: Vec<u32> = ind.iter().map(|vec| vec[0].as_f64().unwrap() as u32).collect();
+    // println!("indices: {:?}", indices[0]);
+    // println!("\nCreate the mesh");
+    //
+    // // spawn mesh from icosahedron
     let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD);
-
-    // mesh.set_indices(Some(Indices::U32(indices))); // was bevy 12.1
+    //
+    // // mesh.set_indices(Some(Indices::U32(indices))); // was bevy 12.1
     mesh.insert_indices(Indices::U32(indices)); // 13.2
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, posses);
     let mesh_handle = meshes.add(mesh);
 
-    // let mut cmd = commands.spawn(PbrBundle {
-    //     mesh: mesh_handle.clone(),
-    //     material: materials.add(Color::BISQUE),
-    //     transform: Transform::from_translation(Vec3::ZERO),
-    //     ..Default::default()
-    // });
+    // end commented out jason
+
+    let mut cmd = commands.spawn(PbrBundle {
+        mesh: mesh_handle.clone(),
+        material: materials.add(Color::BISQUE),
+        transform: Transform::from_translation(Vec3::ZERO),
+        ..Default::default()
+    });
 
     // Hexasphere rust crate
     println!("\n\n ____________________________________\nTest out the hexasphere crate\n____________________________________");
@@ -194,82 +213,83 @@ fn setup(mut commands: Commands,
     }
     // Randomizer for colors
     let mut ranr = rand::thread_rng();
-    for x in adjacency_list {
-        println!("x inside forloop is: {:?}", x);
-        if pents > 0 {
-            // Spawn the pentagon
-            let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::RENDER_WORLD); //, RenderAssetUsages::new() 13.2
-            // println!("points[0] from vec_points: {:?}", vec_points[x[0]]);
-            let my_points = vec![vec_points[x[0]], vec_points[x[1]], vec_points[x[2]], vec_points[x[3]], vec_points[x[4]]];
-
-            let mut center: Vec3 = my_points
-                .iter()
-                .fold(Vec3::ZERO, |sum, i| sum + *i) / 5.0;
-            //.map(jason).map(|x| x / 5).collect(); // (point1 + point2 + point3) / 3.0;
-            println!("my points; {:?}", my_points);
-            println!("center; {:?}", center);
-            mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, my_points);
-            // Pentagon Indices
-            let pent = vec![
-                0, 1, 2,
-                0, 2, 3,
-                0, 3, 4];
-            mesh.insert_indices(Indices::U32(pent));
-            let mesh_handle = meshes.add(mesh);
-
-            let mut cmd = commands.spawn(PbrBundle {
-                mesh: mesh_handle.clone(),
-                material: materials.add(Color::BISQUE),
-                transform: Transform::from_translation(center),
-                ..Default::default()
-            });
-            pents -= 1;
-        } else {
-            // Hexagons?
-            let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::RENDER_WORLD); //, RenderAssetUsages::new() 13.2
-            // insert points and indicies
-            // println!("points[0] from vec_points: {:?}", vec_points[x[0]]);
-            let my_points = vec![vec_points[x[0]], vec_points[x[1]], vec_points[x[2]], vec_points[x[3]], vec_points[x[4]], vec_points[x[5]]];
-            println!("my points; {:?}", my_points);
-            let center: Vec3 = my_points
-                .iter()
-                .fold(Vec3::ZERO, |sum, i| sum + *i) / 6.0;
-            println!("Center is {center}");
-            mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, my_points);
-
-            // Pentagon Indices
-            let hex = vec![
-                0, 1, 2,
-                0, 2, 3,
-                0, 3, 4,
-                0, 4, 5];
-            mesh.insert_indices(Indices::U32(hex));
-
-            let mesh_handle = meshes.add(mesh);
-            let random = &ranr.gen_range(0..4);
-            let col = match random {
-                0 => Color::PINK,
-                1 => Color::ORANGE_RED,
-                2 => Color::BLUE,
-                3 => Color::LIME_GREEN,
-                _ => Color::BISQUE,
-            };
-            // Truly random rainbow colors.
-            let col = Color::rgb(
-                ranr.gen_range(0.0..1.0),
-                ranr.gen_range(0.0..1.0),
-                ranr.gen_range(0.0..1.0),
-            );
-
-            let mut cmd = commands.spawn(PbrBundle {
-                mesh: mesh_handle.clone(),
-                material: materials.add(col),
-                transform: Transform::from_translation(center),
-                ..Default::default()
-            });
-            // break;
-        }
-    }
+    // render rehexed
+    // for x in adjacency_list {
+    //     println!("x inside forloop is: {:?}", x);
+    //     if pents > 0 {
+    //         // Spawn the pentagon
+    //         let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::RENDER_WORLD); //, RenderAssetUsages::new() 13.2
+    //         // println!("points[0] from vec_points: {:?}", vec_points[x[0]]);
+    //         let my_points = vec![vec_points[x[0]], vec_points[x[1]], vec_points[x[2]], vec_points[x[3]], vec_points[x[4]]];
+    //
+    //         let mut center: Vec3 = my_points
+    //             .iter()
+    //             .fold(Vec3::ZERO, |sum, i| sum + *i) / 5.0;
+    //         //.map(jason).map(|x| x / 5).collect(); // (point1 + point2 + point3) / 3.0;
+    //         println!("my points; {:?}", my_points);
+    //         println!("center; {:?}", center);
+    //         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, my_points);
+    //         // Pentagon Indices
+    //         let pent = vec![
+    //             0, 1, 2,
+    //             0, 2, 3,
+    //             0, 3, 4];
+    //         mesh.insert_indices(Indices::U32(pent));
+    //         let mesh_handle = meshes.add(mesh);
+    //
+    //         let mut cmd = commands.spawn(PbrBundle {
+    //             mesh: mesh_handle.clone(),
+    //             material: materials.add(Color::BISQUE),
+    //             transform: Transform::from_translation(center),
+    //             ..Default::default()
+    //         });
+    //         pents -= 1;
+    //     } else {
+    //         // Hexagons?
+    //         let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::RENDER_WORLD); //, RenderAssetUsages::new() 13.2
+    //         // insert points and indicies
+    //         // println!("points[0] from vec_points: {:?}", vec_points[x[0]]);
+    //         let my_points = vec![vec_points[x[0]], vec_points[x[1]], vec_points[x[2]], vec_points[x[3]], vec_points[x[4]], vec_points[x[5]]];
+    //         println!("my points; {:?}", my_points);
+    //         let center: Vec3 = my_points
+    //             .iter()
+    //             .fold(Vec3::ZERO, |sum, i| sum + *i) / 6.0;
+    //         println!("Center is {center}");
+    //         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, my_points);
+    //
+    //         // Pentagon Indices
+    //         let hex = vec![
+    //             0, 1, 2,
+    //             0, 2, 3,
+    //             0, 3, 4,
+    //             0, 4, 5];
+    //         mesh.insert_indices(Indices::U32(hex));
+    //
+    //         let mesh_handle = meshes.add(mesh);
+    //         let random = &ranr.gen_range(0..4);
+    //         let col = match random {
+    //             0 => Color::PINK,
+    //             1 => Color::ORANGE_RED,
+    //             2 => Color::BLUE,
+    //             3 => Color::LIME_GREEN,
+    //             _ => Color::BISQUE,
+    //         };
+    //         // Truly random rainbow colors.
+    //         let col = Color::rgb(
+    //             ranr.gen_range(0.0..1.0),
+    //             ranr.gen_range(0.0..1.0),
+    //             ranr.gen_range(0.0..1.0),
+    //         );
+    //
+    //         let mut cmd = commands.spawn(PbrBundle {
+    //             mesh: mesh_handle.clone(),
+    //             material: materials.add(col),
+    //             transform: Transform::from_translation(center),
+    //             ..Default::default()
+    //         });
+    //         // break;
+    //     }
+    // }
 }
 
 fn write_to_json_file(polyhedron: Polyhedron, path: &Path) {
