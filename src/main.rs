@@ -16,20 +16,43 @@ use rehexed::rehexed;
 use uuid::Uuid;
 use serde::{Deserialize, Serialize};
 
+const WINDOW_W: i32 = 480;
+const WINDOW_H: i32 = 640;
+
 fn main() {
     App::new()
         .insert_resource(AmbientLight {
             color: Color::default(),
             brightness: 1000.,
         })
-        .add_plugins(DefaultPlugins) // For macbook
-        // .add_plugins(DefaultPlugins.set(RenderPlugin {
-        //     render_creation: RenderCreation::Automatic(WgpuSettings {
-        //         backends: Some(Backends::VULKAN),
+        // Custon window title
+        // .add_plugins(WindowPlugin {
+        //     primary_window: Some(Window {
+        //         resolution: (480.0, 640.0).into(),
+        //         title: "Web Hex-".to_string() + env!("CARGO_PKG_VERSION"),
         //         ..default()
         //     }),
         //     ..default()
-        // }))
+        // })
+        // .add_plugins(DefaultPlugins) // For macbook
+        .add_plugins(DefaultPlugins
+            .set(RenderPlugin {
+            render_creation: RenderCreation::Automatic(WgpuSettings {
+                backends: Some(Backends::VULKAN),
+                ..default()
+            }),
+            ..default()
+        })
+            .set(WindowPlugin {
+                primary_window: Some(Window {
+                    title: "Web Hex-".to_string() + env!("CARGO_PKG_VERSION"),
+                    resolution: (1280.0, 720.0).into(),
+                    resizable: false,
+                    ..Default::default()
+                }),
+                ..default()
+            })
+        )
         .add_plugins(PanOrbitCameraPlugin)
         .add_systems(Startup, setup)
         // .add_systems(Update, (keyboard_controls))
@@ -49,7 +72,7 @@ fn setup(mut commands: Commands,
     // });
     commands.spawn((
         Camera3dBundle {
-            transform: Transform::from_translation(Vec3::new(0.0, 1.5, 5.0)),
+            transform: Transform::from_translation(Vec3::new(12.0, 1.5, 8.0)),
             ..default()
         },
         PanOrbitCamera::default(),
@@ -88,16 +111,14 @@ fn setup(mut commands: Commands,
 
     // println!("{:?}", json_data);
     // println!("Object 0: {}\n has [0][1]: {}", json_data["tiles"][0], json_data["tiles"][0][1]);
-    println!("Object 0: {:?}\n has [0][1]: {:?}", p.tiles[0], p.tiles[0].centerPoint);
+    println!("Object 0: {:?}\n has [0][1]: {:?}", p.tiles[0], p.tiles[0].center_point);
     
     let tiles: Vec<Tile> = p.tiles;
     for (i, tile) in tiles.iter().enumerate() {
-        info!("Tile {} is hex {} and has center at {:?}", i, tile.is_hex, tile.centerPoint);
+        info!("Tile {} is hex {} and has center at {:?}", i, tile.is_hex, tile.center_point);
     }
 
-    // let positions = json_data["positions"].as_array().expect("Should be array");
-
-    // hex_mesh json. has all faces in 1 mesh. works
+    // hex_mesh.json. has all faces in 1 mesh. works
     // let positions = json_data["vertices"].as_array().expect("Should be array");
     // let posses: Vec<Vec3> = positions.iter().map(|vec| Vec3::new(vec["x"].as_f64().unwrap() as f32, vec["y"].as_f64().unwrap() as f32, vec["z"].as_f64().unwrap() as f32)).collect();
     // let ind = json_data["triangles"].as_array().expect("Should be array");
@@ -122,26 +143,27 @@ fn setup(mut commands: Commands,
         //     .iter()
         //     .fold(Vec3::ZERO, |sum, i| sum + *i) / 5.0;
         //.map(jason).map(|x| x / 5).collect(); // (point1 + point2 + point3) / 3.0;
-        let center = Vec3::new(tile.centerPoint.x, tile.centerPoint.y, tile.centerPoint.z);
+        let center = Vec3::new(tile.center_point.x, tile.center_point.y, tile.center_point.z);
         println!("my points; {:?}", my_points);
-        println!("center; {:?}", tile.centerPoint);
+        println!("center tile; {:?}", tile.center_point);
+        println!("center  vec; {:?}", center);
         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, my_points);
         
         // Indices
-        let mut inds = vec![
-            0, 1, 2,
-            0, 2, 3,
-            0, 3, 4];
-
-        if tile.is_hex {
-            let mut hexes = vec![0_u32, 4, 5];
-            // inds.append(hexes);
-            // inds.push(&hexes);
-            inds.push(0);
-            inds.push(4);
-            inds.push(5);
-        }
-        mesh.insert_indices(Indices::U32(inds));
+        // let mut inds = vec![
+        //     0, 1, 2,
+        //     0, 2, 3,
+        //     0, 3, 4];
+        //
+        // if tile.is_hex {
+        //     let mut hexes = vec![0_u32, 4, 5];
+        //     // inds.append(hexes);
+        //     // inds.push(&hexes);
+        //     inds.push(0);
+        //     inds.push(4);
+        //     inds.push(5);
+        // }
+        mesh.insert_indices(Indices::U32(tile.indices));
         let mesh_handle = meshes.add(mesh);
 
         // Colors randomization
@@ -418,9 +440,11 @@ pub struct Tiles {
 // Tile struct
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Tile {
-    boundary: Vec<Point>,
-    is_hex: bool,
-    centerPoint: Point,
+    pub guid: String,
+    pub boundary: Vec<Point>,
+    pub is_hex: bool,
+    pub center_point: Point,
+    pub indices: Vec<u32>,
 }
 
 // Point struct
