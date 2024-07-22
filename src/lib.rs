@@ -8,7 +8,7 @@ use cgmath::prelude::*;
 use cgmath::Vector3;
 use rand::prelude::*;
 use serde::ser::{SerializeSeq, Serializer};
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 
 const VERT_CACHE_PRECISION: f32 = 10000_f32;
 

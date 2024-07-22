@@ -13,6 +13,7 @@ rand = "0.8.5"
 cgmath = { version = "0.17.0", features = ["serde"] }
 bevy_panorbit_camera = "0.18.2"
 rehexed = "0.1.1"
+uuid = {version="1.10.0", features=["fast-rng"]}
 
 # Enable a small amount of optimization in debug mode.
 [profile.dev]

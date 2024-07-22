@@ -13,6 +13,8 @@ use bevy_panorbit_camera::{PanOrbitCamera, PanOrbitCameraPlugin};
 use icosahedron::Polyhedron;
 use rand::Rng;
 use rehexed::rehexed;
+use uuid::Uuid;
+use serde::{Deserialize, Serialize};
 
 fn main() {
     App::new()
@@ -20,14 +22,14 @@ fn main() {
             color: Color::default(),
             brightness: 1000.,
         })
-        // .add_plugins(DefaultPlugins) // For macbook
-        .add_plugins(DefaultPlugins.set(RenderPlugin {
-            render_creation: RenderCreation::Automatic(WgpuSettings {
-                backends: Some(Backends::VULKAN),
-                ..default()
-            }),
-            ..default()
-        }))
+        .add_plugins(DefaultPlugins) // For macbook
+        // .add_plugins(DefaultPlugins.set(RenderPlugin {
+        //     render_creation: RenderCreation::Automatic(WgpuSettings {
+        //         backends: Some(Backends::VULKAN),
+        //         ..default()
+        //     }),
+        //     ..default()
+        // }))
         .add_plugins(PanOrbitCameraPlugin)
         .add_systems(Startup, setup)
         // .add_systems(Update, (keyboard_controls))
@@ -68,6 +70,7 @@ fn setup(mut commands: Commands,
     // From icosahedron github
     println!("Read in our json file");
     let mut file = File::open("unity.json").expect("file should open read only");
+    // let mut file = File::open("hex_mesh.json").expect("file should open read only");
     // let mut file = File::open("hexsphere_r10_d2.json").expect("file should open read only");
     let mut data = String::new();
     file.read_to_string(&mut data).unwrap();
@@ -79,25 +82,97 @@ fn setup(mut commands: Commands,
     // colors [0.6898445, 0.40806764, 0.51248604]
     // faces [90, 91, 92, 93, 94, 95, 96, 97, 98, 99]
     // `jq '.faces|length' hexsphere_r10_d0.json` was 12? cells: 120, pos: 360
-    let json_data: serde_json::Value = serde_json::from_str(&data).expect("Unable to parse");
+    // let json_data: serde_json::Value = serde_json::from_str(&data).expect("Unable to parse");
+    info!("Parse json to our object");
+    let p: Tiles = serde_json::from_str(&data).expect("Json data should conform to our object yo");
 
     // println!("{:?}", json_data);
-    // println!("Please call {} at the number {}", json_data["positions"][0][0], json_data["normals"][0][2]);
-    println!("Please call {} at the number {}", json_data["vertices"][0], json_data["triangles"][0]);
+    // println!("Object 0: {}\n has [0][1]: {}", json_data["tiles"][0], json_data["tiles"][0][1]);
+    println!("Object 0: {:?}\n has [0][1]: {:?}", p.tiles[0], p.tiles[0].centerPoint);
+    
+    let tiles: Vec<Tile> = p.tiles;
+    for (i, tile) in tiles.iter().enumerate() {
+        info!("Tile {} is hex {} and has center at {:?}", i, tile.is_hex, tile.centerPoint);
+    }
 
     // let positions = json_data["positions"].as_array().expect("Should be array");
-    let positions = json_data["vertices"].as_array().expect("Should be array");
-    let positions_vec: Vec<Vec<f32>> = positions
-        .iter()
-        .map(|vec| {
-            let y = vec["x"].clone().as_f64().unwrap() as f32;
-            vec![
-                vec["x"].clone().as_f64().unwrap() as f32,
-                vec["y"].clone().as_f64().unwrap() as f32,
-                vec["z"].clone().as_f64().unwrap() as f32,
-            ]
-        })
-        .collect();
+
+    // hex_mesh json. has all faces in 1 mesh. works
+    // let positions = json_data["vertices"].as_array().expect("Should be array");
+    // let posses: Vec<Vec3> = positions.iter().map(|vec| Vec3::new(vec["x"].as_f64().unwrap() as f32, vec["y"].as_f64().unwrap() as f32, vec["z"].as_f64().unwrap() as f32)).collect();
+    // let ind = json_data["triangles"].as_array().expect("Should be array");
+    // let indices: Vec<u32> = ind.iter().map(|vec| vec.as_f64().unwrap() as u32).collect();
+    // end hex_mesh json
+
+    // unity .json
+    // let positions = json_data["tiles"].as_array().expect("Should be array");
+    // println!("positions len: {:?}", positions.len());
+    // println!("positions 0: {:?}", positions[0]);
+
+    for tile in tiles {
+        let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::RENDER_WORLD); //, RenderAssetUsages::new() 13.2
+        // println!("points[0] from vec_points: {:?}", vec_points[x[0]]);
+
+        // points
+        let my_points: Vec<Vec3> = tile.boundary.iter().map(|b| Vec3::new(b.x, b.y, b.z)).collect();
+        // let my_points = vec![vec_points[x[0]], vec_points[x[1]], vec_points[x[2]], vec_points[x[3]], vec_points[x[4]]];
+
+        // Center comes from tile
+        // let mut center: Vec3 = my_points
+        //     .iter()
+        //     .fold(Vec3::ZERO, |sum, i| sum + *i) / 5.0;
+        //.map(jason).map(|x| x / 5).collect(); // (point1 + point2 + point3) / 3.0;
+        let center = Vec3::new(tile.centerPoint.x, tile.centerPoint.y, tile.centerPoint.z);
+        println!("my points; {:?}", my_points);
+        println!("center; {:?}", tile.centerPoint);
+        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, my_points);
+        
+        // Indices
+        let mut inds = vec![
+            0, 1, 2,
+            0, 2, 3,
+            0, 3, 4];
+
+        if tile.is_hex {
+            let mut hexes = vec![0_u32, 4, 5];
+            // inds.append(hexes);
+            // inds.push(&hexes);
+            inds.push(0);
+            inds.push(4);
+            inds.push(5);
+        }
+        mesh.insert_indices(Indices::U32(inds));
+        let mesh_handle = meshes.add(mesh);
+
+        // Colors randomization
+        let mut ranr = rand::thread_rng();
+        let random = &ranr.gen_range(0..4);
+        let mut col = match random {
+            0 => Color::PINK,
+            1 => Color::ORANGE_RED,
+            2 => Color::BLUE,
+            3 => Color::LIME_GREEN,
+            _ => Color::BISQUE,
+        };
+        // Truly random rainbow colors.
+        let mut col = Color::rgb(
+            ranr.gen_range(0.0..1.0),
+            ranr.gen_range(0.0..1.0),
+            ranr.gen_range(0.0..1.0),
+        );
+        if !tile.is_hex {
+            col = Color::BISQUE
+        }
+
+        let mut cmd = commands.spawn(PbrBundle {
+            mesh: mesh_handle.clone(),
+            material: materials.add(col),
+            // transform: Transform::from_translation(center),
+            ..Default::default()
+        });
+    }
+    // end unity .json
+
     // let positions_vec: Vec<Vec<f32>> = positions
     //     .iter()
     //     .map(|vec| vec![
@@ -106,35 +181,35 @@ fn setup(mut commands: Commands,
     //         vec[2].as_f64().unwrap() as f32])
     //     .collect();
     // let posses: Vec<Vec3> = positions.iter().map(|vec| Vec3::new(vec[0].as_f64().unwrap() as f32, vec[1].as_f64().unwrap() as f32, vec[2].as_f64().unwrap() as f32)).collect();
-    let posses: Vec<Vec3> = positions.iter().map(|vec| Vec3::new(vec["x"].as_f64().unwrap() as f32, vec["y"].as_f64().unwrap() as f32, vec["z"].as_f64().unwrap() as f32)).collect();
-    // println!("Poss: {:?}", positions_vec[0]);
+    // println!("posses: {:?}", posses[0]);
     //
     // let nor = json_data["normals"].as_array().expect("Should be array");
     // let normals: Vec<Vec3> = nor.iter().map(|vec| Vec3::new(vec[0].as_f64().unwrap() as f32, vec[1].as_f64().unwrap() as f32, vec[2].as_f64().unwrap() as f32)).collect();
     //
     // let ind = json_data["cells"].as_array().expect("Should be array");
-    let ind = json_data["triangles"].as_array().expect("Should be array");
+    // println!("Parse triangles");
+    // println!("Ind: {:?}", ind);
+
     // let indices: Vec<u32> = ind.iter().map(|vec| vec![vec[0].as_f64().unwrap() as u32, vec[1].as_f64().unwrap() as u32, vec[2].as_f64().unwrap() as u32]).flatten().collect();
-    let indices: Vec<u32> = ind.iter().map(|vec| vec[0].as_f64().unwrap() as u32).collect();
     // println!("indices: {:?}", indices[0]);
     // println!("\nCreate the mesh");
     //
     // // spawn mesh from icosahedron
-    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD);
-    //
-    // // mesh.set_indices(Some(Indices::U32(indices))); // was bevy 12.1
-    mesh.insert_indices(Indices::U32(indices)); // 13.2
-    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, posses);
-    let mesh_handle = meshes.add(mesh);
+    // let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD);
+    // //
+    // // // mesh.set_indices(Some(Indices::U32(indices))); // was bevy 12.1
+    // mesh.insert_indices(Indices::U32(indices)); // 13.2
+    // mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, posses);
+    // let mesh_handle = meshes.add(mesh);
 
-    // end commented out jason
+    // // end commented out jason
 
-    let mut cmd = commands.spawn(PbrBundle {
-        mesh: mesh_handle.clone(),
-        material: materials.add(Color::BISQUE),
-        transform: Transform::from_translation(Vec3::ZERO),
-        ..Default::default()
-    });
+    // let mut cmd = commands.spawn(PbrBundle {
+    //     mesh: mesh_handle.clone(),
+    //     material: materials.add(Color::PURPLE),
+    //     transform: Transform::from_translation(Vec3::ZERO),
+    //     ..Default::default()
+    // });
 
     // Hexasphere rust crate
     println!("\n\n ____________________________________\nTest out the hexasphere crate\n____________________________________");
@@ -146,10 +221,10 @@ fn setup(mut commands: Commands,
     // adjacency allows the user to create neighbour maps from the indices provided by the Subdivided struct
 
     let indices = sphere.get_all_indices();
-    println!("\n\nRaw indices are: {:?}\n", indices);
+    // println!("\n\nRaw indices are: {:?}\n", indices);
     let adjacency_list = rehexed(&indices, sphere.raw_points().len());
-    println!("\n\nRehexed: {:?}\n", adjacency_list);
 
+    // println!("\n\nRehexed: {:?}\n", adjacency_list);
     println!("Rehexed len: {:?}", adjacency_list.len());
 
     // let json = serde_json::to_string(&sphere).expect("Problem serializing");
@@ -208,11 +283,11 @@ fn setup(mut commands: Commands,
 
     // adjacency_list  [87, 92, 95, 98, 101, 18446744073709551615], [13, 102, 26, 0, 15, 105],
     let mut pents = 12;
-    for (i, x) in vec_points.iter().enumerate() {
-        println!("{i}: {x:?}");
-    }
+    // for (i, x) in vec_points.iter().enumerate() {
+    //     println!("{i}: {x:?}");
+    // }
     // Randomizer for colors
-    let mut ranr = rand::thread_rng();
+    // let mut ranr = rand::thread_rng();
     // render rehexed
     // for x in adjacency_list {
     //     println!("x inside forloop is: {:?}", x);
@@ -331,5 +406,35 @@ pub fn keyboard_controls(
         }
 
         transform.translation = pos;
+    }
+}
+
+// Tile struct wrapper
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Tiles {
+    tiles: Vec<Tile>,
+}
+
+// Tile struct
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Tile {
+    boundary: Vec<Point>,
+    is_hex: bool,
+    centerPoint: Point,
+}
+
+// Point struct
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Point {
+    pub guid: String,
+    // pub position: Vec3,
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+}
+
+impl Point {
+    pub fn new(guid: String, x: f32, y: f32, z: f32) -> Self {
+        Point {guid, x, y, z }
     }
 }
