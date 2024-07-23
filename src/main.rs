@@ -25,15 +25,6 @@ fn main() {
             color: Color::default(),
             brightness: 1000.,
         })
-        // Custon window title
-        // .add_plugins(WindowPlugin {
-        //     primary_window: Some(Window {
-        //         resolution: (480.0, 640.0).into(),
-        //         title: "Web Hex-".to_string() + env!("CARGO_PKG_VERSION"),
-        //         ..default()
-        //     }),
-        //     ..default()
-        // })
         // .add_plugins(DefaultPlugins) // For macbook
         .add_plugins(DefaultPlugins
             .set(RenderPlugin {
@@ -55,6 +46,7 @@ fn main() {
         )
         .add_plugins(PanOrbitCameraPlugin)
         .add_systems(Startup, setup)
+        .add_systems(Update, muh_update)
         // .add_systems(Update, (keyboard_controls))
         .run();
 }
@@ -169,6 +161,17 @@ fn setup(mut commands: Commands,
         // Colors randomization
         let mut ranr = rand::thread_rng();
         let random = &ranr.gen_range(0..4);
+
+        // material from image
+        // let texture_handle = asset_server.load("branding/bevy_logo_dark_big.png");
+        // let material_handle = materials.add(StandardMaterial {
+        //     base_color_texture: Some(texture_handle.clone()),
+        //     alpha_mode: AlphaMode::Blend,
+        //     unlit: true,
+        //     ..default()
+        // });
+    
+        // Srgba::hex("#ffd891").unwrap().into(),
         let mut col = match random {
             0 => Color::PINK,
             1 => Color::ORANGE_RED,
@@ -185,15 +188,28 @@ fn setup(mut commands: Commands,
         if !tile.is_hex {
             col = Color::BISQUE
         }
+        // set mettalic quality: https://bevyengine.org/examples/3d-rendering/pbr/
+        // render ui to texture: https://bevyengine.org/examples/ui-user-interface/render-ui-to-texture/
+        todo!("^");
 
-        let mut cmd = commands.spawn(PbrBundle {
-            mesh: mesh_handle.clone(),
-            material: materials.add(col),
-            // transform: Transform::from_translation(center),
-            ..Default::default()
-        });
+        let mut cmd = commands.spawn((
+            PbrBundle {
+                mesh: mesh_handle.clone(),
+                // material: materials.add(col),
+                material: materials.add(StandardMaterial {
+                    base_color: col,
+                    // vary key PBR parameters on a grid of spheres to show the effect
+                    metallic: 0.4,
+                    perceptual_roughness: 0.9,
+                    ..default()
+                }),
+                // transform: Transform::from_translation(center),
+                ..Default::default()
+            },
+            Ground,
+        ));
     }
-    // end unity .json
+    // end unity.json
 
     // let positions_vec: Vec<Vec<f32>> = positions
     //     .iter()
@@ -389,6 +405,45 @@ fn setup(mut commands: Commands,
     // }
 }
 
+#[derive(Component)]
+struct Ground;
+
+fn muh_update () {
+    // cursor position
+    // https://bevyengine.org/examples/ui-user-interface/relative-cursor-position/
+}
+
+fn draw_cursor(
+    camera_query: Query<(&Camera, &GlobalTransform)>,
+    ground_query: Query<&GlobalTransform, With<Ground>>,
+    windows: Query<&Window>,
+    mut gizmos: Gizmos,
+) {
+    let (camera, camera_transform) = camera_query.single();
+    let ground = ground_query.single();
+
+    let Some(cursor_position) = windows.single().cursor_position() else {
+        return;
+    };
+
+    // Calculate a ray pointing from the camera into the world based on the cursor's position.
+    let Some(ray) = camera.viewport_to_world(camera_transform, cursor_position) else {
+        return;
+    };
+
+    // Calculate if and where the ray is hitting the ground plane.
+    // let Some(distance) =
+    // ray.intersect_plane(ground.translation(), plane)
+    //     //ray.intersect_plane(ground.translation(), InfinitePlane3d::new(ground.up()))
+    // else {
+    //     return;
+    // };
+    // let point = ray.get_point(distance);
+
+    // Draw a circle just above the ground plane at that position.
+    // gizmos.circle(point + ground.up() * 0.01, ground.up(), 0.2, Color::WHITE);
+}
+
 fn write_to_json_file(polyhedron: Polyhedron, path: &Path) {
     let mut json_file = File::create(path).expect("Can't create file");
     let json = serde_json::to_string(&polyhedron).expect("Problem serializing");
@@ -441,12 +496,12 @@ pub struct Tiles {
 // Tile struct
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Tile {
-    pub guid: String,
+    pub guid: u32,
     pub center_point: Point,
     pub is_hex: bool,
     pub boundary: Vec<Point>,
     pub indices: Vec<u32>,
-    pub neighbours: Vec<String>,
+    pub neighbours: Vec<u32>,
 }
 
 // Point struct
