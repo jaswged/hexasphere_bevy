@@ -434,6 +434,7 @@ pub fn keyboard_controls(
 // Tile struct wrapper
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Tiles {
+    radius: u32,
     tiles: Vec<Tile>,
 }
 
@@ -441,16 +442,17 @@ pub struct Tiles {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Tile {
     pub guid: String,
-    pub boundary: Vec<Point>,
-    pub is_hex: bool,
     pub center_point: Point,
+    pub is_hex: bool,
+    pub boundary: Vec<Point>,
     pub indices: Vec<u32>,
+    pub neighbours: Vec<String>,
 }
 
 // Point struct
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Point {
-    pub guid: String,
+    // pub guid: String,
     // pub position: Vec3,
     pub x: f32,
     pub y: f32,
@@ -459,6 +461,7 @@ pub struct Point {
 
 impl Point {
     pub fn new(guid: String, x: f32, y: f32, z: f32) -> Self {
-        Point {guid, x, y, z }
+        // Point {guid, x, y, z }
+        Point { x, y, z }
     }
 }
