@@ -15,6 +15,7 @@ use bevy::render::{
     render_asset::RenderAssetUsages,
     settings::{Backends, RenderCreation, WgpuSettings},
 };
+use bevy::window::WindowTheme;
 use serde::ser::SerializeSeq;
 use hexasphere::shapes::IcoSphere;
 use std::io::Read;
@@ -26,9 +27,25 @@ use uuid::Uuid;
 use serde::{Deserialize, Serialize};
 
 // region from mouse to tile example
+#[derive(Debug, Resource)]
+pub struct SelectedTile {
+    pub tile: Option<Tile>,
+    pub entity: Option<Entity>,
+}
+
+impl Default for SelectedTile {
+    fn default() -> Self {
+        Self {
+            tile: None,
+            entity: None,
+        }
+    }
+}
+
 // From mouse to tile example
 #[derive(Resource, Debug)]
 pub struct CursorPos(Vec2);
+
 #[derive(Component)]
 struct HighlightedLabel;
 
@@ -42,6 +59,7 @@ impl Default for CursorPos {
         Self(Vec2::new(-1000.0, -1000.0))
     }
 }
+
 // We need to keep the cursor position updated based on any `CursorMoved` events.
 pub fn update_cursor_pos(
     camera_q: Query<(&GlobalTransform, &Camera)>,
@@ -69,6 +87,7 @@ fn main() {
             brightness: 1000.,
         })
         .init_resource::<CursorPos>()
+        .init_resource::<SelectedTile>()
         // .add_plugins(DefaultPlugins) // For macbook
         .add_plugins(DefaultPlugins
             .set(RenderPlugin {
@@ -83,6 +102,7 @@ fn main() {
                     title: "Web Hex-".to_string() + env!("CARGO_PKG_VERSION"),
                     resolution: (1280.0, 720.0).into(),
                     resizable: false,
+                    window_theme: Some(WindowTheme::Dark),
                     ..Default::default()
                 }),
                 ..default()
@@ -100,6 +120,7 @@ fn setup(mut commands: Commands,
          mut materials: ResMut<Assets<StandardMaterial>>,
          asset_server: Res<AssetServer>,
          mut images: ResMut<Assets<Image>>,
+         windows: Query<&Window>,
 ) {
     info!("Setup function called");
     commands.spawn((
@@ -137,9 +158,9 @@ fn setup(mut commands: Commands,
     println!("Object 0: {:?}\n has [0][1]: {:?}", p.tiles[0], p.tiles[0].center_point);
 
     let tiles: Vec<Tile> = p.tiles;
-    for (i, tile) in tiles.iter().enumerate() {
-        info!("Tile {} has center at {:?}", i, tile.center_point);
-    }
+    // for (i, tile) in tiles.iter().enumerate() {
+    //     info!("Tile {} has center at {:?}", i, tile.center_point);
+    // }
 
     for tile in tiles {
         let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::RENDER_WORLD); //, RenderAssetUsages::new() 13.2
@@ -197,24 +218,11 @@ fn setup(mut commands: Commands,
 
         // render ui to texture: https://bevyengine.org/examples/ui-user-interface/render-ui-to-texture/
 
-        // Put label on each tile
-        let font = asset_server.load("fonts/FiraCodeNerdFontPropo-Regular.ttf");
-        commands.spawn(Text2dBundle {
-            text: Text::from_section(
-                "Hello World",
-                TextStyle {
-                    font,
-                    font_size: 40.0,
-                    color: Color::BLACK,
-                },
-                //Default::default()
-            ),
-            transform: Transform::from_translation(center), //from_xyz(0.0, 1.0, 0.0),
-            ..Default::default()
-        });
+        // todo put ent into an array to hold all tiles? or HashMap<Hex, Entity>
 
         // todo mesh would be part of our GameComponent bundle?
-        // let mut cmd =
+        //asset_server.load("fonts/FiraCodeNerdFontPropo-Regular.ttf")
+        // let ent =
         commands.spawn((
             PbrBundle {
                 mesh: mesh_handle,
@@ -224,7 +232,26 @@ fn setup(mut commands: Commands,
                 ..Default::default()
             },
             Ground,
-        ));
+        )).with_children(|parent| {
+            // Add a text label above the mesh
+            parent.spawn(Text2dBundle {
+                text: Text::from_section(
+                    "My Mesh Label",
+                    TextStyle {
+                        font: asset_server.load("fonts/FiraCodeNerdFontPropo-Regular.ttf"),
+                        font_size: 50.0,
+                        color: Color::WHITE,
+                    },
+                    // Default::default(),
+                ),
+                transform: Transform {
+                    translation: Vec3::from(center + Vec3::new(0., 1.0, 0.)), // Vec3::new(0.0, 1.0, 0.0), // Position above the mesh
+                    ..Default::default()
+                },
+                ..Default::default()
+            });
+        });
+        //.id();
     }
 }
 
@@ -250,7 +277,7 @@ fn muh_update(keyboard_input: Res<ButtonInput<KeyCode>>, cursor_pos: Res<CursorP
 }
 
 fn muh_update_2(keyboard_input: Res<ButtonInput<KeyCode>>,
-                ground_query: Query<&GlobalTransform, With<Ground>>,) {
+                ground_query: Query<&GlobalTransform, With<Ground>>) {
     // cursor position
     // https://bevyengine.org/examples/ui-user-interface/relative-cursor-position/
     if keyboard_input.just_pressed(KeyCode::Enter) {
