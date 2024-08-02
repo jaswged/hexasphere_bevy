@@ -1,6 +1,5 @@
-use std::f32::consts::PI;
 use bevy::prelude::*;
-use serde::*;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
@@ -8,22 +7,17 @@ use bevy::render::{
     camera::Camera,
     mesh::Indices,
     RenderPlugin,
-    camera::RenderTarget,
-    render_resource::{
-        Extent3d, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, PrimitiveTopology,
-    },
+    render_resource::PrimitiveTopology,
     render_asset::RenderAssetUsages,
     settings::{Backends, RenderCreation, WgpuSettings},
 };
 use bevy::window::WindowTheme;
-use serde::ser::SerializeSeq;
-use hexasphere::shapes::IcoSphere;
 use std::io::Read;
+use std::slice::Windows;
+use bevy::math::bounding::{RayCast2d, RayCast3d};
+use bevy::render::mesh::VertexAttributeValues;
 use bevy_panorbit_camera::{PanOrbitCamera, PanOrbitCameraPlugin};
-use icosahedron::Polyhedron;
 use rand::Rng;
-use rehexed::rehexed;
-use uuid::Uuid;
 use serde::{Deserialize, Serialize};
 
 // region from mouse to tile example
@@ -108,10 +102,12 @@ fn main() {
                 ..default()
             })
         )
+        // 3rd party plugins
         .add_plugins(PanOrbitCameraPlugin)
+        // Our plugins
         .add_systems(Startup, setup)
         .add_systems(First, (update_cursor_pos).chain())
-        .add_systems(Update, (muh_update, muh_update_2)) // highlight_tile_labels
+        .add_systems(Update, (muh_update, muh_update_2))
         .run();
 }
 
@@ -126,8 +122,10 @@ fn setup(mut commands: Commands,
     commands.spawn((
         Camera3dBundle {
             transform: Transform::from_translation(Vec3::new(12.0, 1.5, 8.0)),
+            // transform: Transform::from_translation(Vec3::new(12.0, 12.5, 8.0)).looking_at(Vec3::ZERO, Vec3::Y),
             ..default()
         },
+        // todo prevent right click moving camera in PanOrbitCamera
         PanOrbitCamera::default(),
     ));
 
@@ -140,10 +138,9 @@ fn setup(mut commands: Commands,
     //     },
     // ));
 
-    let mut x = Polyhedron::new_isocahedron(10.0, 1);
-    x.compute_triangle_normals();
+    let mut map = BTreeMap::new();
 
-    // From icosahedron github
+    // Unity has 92 tiles: [ Unity_4:162, Unity_6:362, Unity_9:812, Unity_10:1002, Unity_20:4002 ]
     println!("Read in our json file");
     let mut file = File::open("unity.json").expect("file should open read only");
     let mut data = String::new();
@@ -157,12 +154,7 @@ fn setup(mut commands: Commands,
     // println!("Object 0: {}\n has [0][1]: {}", json_data["tiles"][0], json_data["tiles"][0][1]);
     println!("Object 0: {:?}\n has [0][1]: {:?}", p.tiles[0], p.tiles[0].center_point);
 
-    let tiles: Vec<Tile> = p.tiles;
-    // for (i, tile) in tiles.iter().enumerate() {
-    //     info!("Tile {} has center at {:?}", i, tile.center_point);
-    // }
-
-    for tile in tiles {
+    for tile in p.tiles {  // Vec<Tile>
         let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::RENDER_WORLD); //, RenderAssetUsages::new() 13.2
 
         // points
@@ -174,29 +166,42 @@ fn setup(mut commands: Commands,
 
         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, my_points);
         mesh.insert_indices(Indices::U32(tile.indices));
+
+        // Uvs came from Chat Gpt
+        let hex_uvs = if tile.is_hex {
+            vec![
+                [1.0, 0.5],
+                [0.75, 0.9330127],
+                [0.24999997, 0.9330127],
+                [0.0, 0.49999997],
+                [0.25000006, 0.066987276],
+                [0.74999994, 0.066987276]
+            ]
+        } else {
+            vec![
+                [1.0, 0.5],
+                [0.6545085, 0.97552824],
+                [0.09549147, 0.7938926],
+                [0.09549153, 0.20610732],
+                [0.6545086, 0.02447176]
+            ]
+        };
+
+        mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, hex_uvs);
         let mesh_handle = meshes.add(mesh);
 
         // Colors randomization
         let mut ranr = rand::thread_rng();
         let random = &ranr.gen_range(0..4);
 
-        // todo material from image
-        // let texture_handle = asset_server.load("branding/bevy_logo_dark_big.png");
-        // let material_handle = materials.add(StandardMaterial {
-        //     base_color_texture: Some(texture_handle.clone()),
-        //     alpha_mode: AlphaMode::Blend,
-        //     unlit: true,
-        //     ..default()
-        // });
-
         // Srgba::hex("#ffd891").unwrap().into(),
-        let mut col = match random {
-            0 => Color::PINK,
-            1 => Color::ORANGE_RED,
-            2 => Color::BLUE,
-            3 => Color::LIME_GREEN,
-            _ => Color::BISQUE,
-        };
+        // let mut col = match random {
+        //     0 => Color::WhPINK,
+        //     1 => Color::ORANGE_RED,
+        //     2 => Color::BLUE,
+        //     3 => Color::LIME_GREEN,
+        //     _ => Color::BISQUE,
+        // };
         // Truly random rainbow colors.
         let mut col = Color::rgb(
             ranr.gen_range(0.0..1.0),
@@ -204,7 +209,7 @@ fn setup(mut commands: Commands,
             ranr.gen_range(0.0..1.0),
         );
         if !tile.is_hex {
-            col = Color::BISQUE
+            col = Color::BLACK;
         }
 
         // set metallic quality: https://bevyengine.org/examples/3d-rendering/pbr/
@@ -216,78 +221,145 @@ fn setup(mut commands: Commands,
             ..default()
         });
 
+        // Import the custom texture with the number on it.
+        let img_path = format!("num_textures/{}.png", tile.guid);
+        // let img_handle: Handle<Image> = asset_server.load(img_path);
+        // let img_handle = asset_server.load("0.png");
+
+        let material_handle = materials.add(StandardMaterial {
+            base_color_texture: Some(asset_server.load(img_path)), // img_handle.clone()),
+            // alpha_mode: AlphaMode::Blend,
+            // unlit: true,
+            ..default()
+        });
+        // let stand_mat = materials.add(StandardMaterial {
+        //     base_color_texture: Some(img_handle),
+        //     ..default()
+        // });
+        // let mat = asset_server.add(stand_mat);
+
         // render ui to texture: https://bevyengine.org/examples/ui-user-interface/render-ui-to-texture/
 
-        // todo put ent into an array to hold all tiles? or HashMap<Hex, Entity>
-
         // todo mesh would be part of our GameComponent bundle?
-        //asset_server.load("fonts/FiraCodeNerdFontPropo-Regular.ttf")
-        // let ent =
-        commands.spawn((
-            PbrBundle {
+        // Create a Tile bundle to spawn that has its own pbrBundle as a field
+        // This struct also has the tile id and type of hex/Biome.
+        let tile_id = commands.spawn((TileBundle {
+            mesh: PbrBundle {
                 mesh: mesh_handle,
+                material: material_handle,
                 // material: materials.add(col),
-                material: metal_mat,
+                // material: metal_mat,
                 // transform: Transform::from_translation(center),
                 ..Default::default()
             },
-            Ground,
-        )).with_children(|parent| {
-            // Add a text label above the mesh
-            parent.spawn(Text2dBundle {
-                text: Text::from_section(
-                    "My Mesh Label",
-                    TextStyle {
-                        font: asset_server.load("fonts/FiraCodeNerdFontPropo-Regular.ttf"),
-                        font_size: 50.0,
-                        color: Color::WHITE,
-                    },
-                    // Default::default(),
-                ),
-                transform: Transform {
-                    translation: Vec3::from(center + Vec3::new(0., 1.0, 0.)), // Vec3::new(0.0, 1.0, 0.0), // Position above the mesh
-                    ..Default::default()
-                },
-                ..Default::default()
-            });
-        });
-        //.id();
+            biome: Biome::new("col".to_string()),
+            id: TileId::new(tile.guid),
+            tile_obj: TileObj::new(tile.guid, "col".to_string()),
+        },
+          Ground,
+          // TileObj::new(tile.guid, "col".to_string()),
+         ),
+        ).id();
+
+        // todo put ent into an array to hold all tiles? or HashMap<Hex, Entity>
+        // insert entity id into a hashmap of all tiles?
+        map.insert(tile.guid, tile_id);
+
+        // info!("Spawned tile {} with entity id {}", tile.guid, tile_id.index());
     }
+    // info!("Print out the hashmap of all tiles: {:?}", map);
+}
+
+#[derive(Component, Debug)]
+pub struct Biome {
+    pub value: String,
+}
+
+impl Biome {
+    pub fn new(value: String) -> Self {
+        Self { value }
+    }
+}
+
+#[derive(Component, Debug)]
+pub struct TileId {
+    pub value: u32,
+}
+
+impl TileId {
+    pub fn new(value: u32) -> Self {
+        Self { value }
+    }
+}
+
+#[derive(Bundle)]
+pub struct TileBundle {
+    pub mesh: PbrBundle,
+    pub biome: Biome,
+    pub id: TileId,
+    pub tile_obj: TileObj,
 }
 
 #[derive(Component)]
 struct Ground;
 
-fn muh_update(keyboard_input: Res<ButtonInput<KeyCode>>, cursor_pos: Res<CursorPos>) {
+fn muh_update(keyboard_input: Res<ButtonInput<KeyCode>>, cursor_pos1: Res<CursorPos>) {
     // cursor position
     // https://bevyengine.org/examples/ui-user-interface/relative-cursor-position/
     if keyboard_input.just_pressed(KeyCode::Space) {
         info!("Space pressed");
-        // test out things here
 
         // print out cursor position
         // Grab the cursor position from the `Res<CursorPos>`
-        let cursor_pos: Vec2 = cursor_pos.0;
+        let cursor_pos2: Vec2 = cursor_pos1.0;
         // We need to make sure that the cursor's world position is correct relative to the map
         // due to any map transformation.
-        println!("Cursor_pos: {:?}", cursor_pos);
+        println!("Cursor_pos1: {:?}", cursor_pos1);
+        println!("Cursor_pos2: {:?}", cursor_pos2);
 
         // get and print out all Tile Ids?
     }
 }
 
 fn muh_update_2(keyboard_input: Res<ButtonInput<KeyCode>>,
-                ground_query: Query<&GlobalTransform, With<Ground>>) {
+                windows: Query<&Window>,
+                camera_query: Query<(&Camera, &GlobalTransform)>,
+                mut gizmos: Gizmos,
+                // ground_query: Query<&TileObj, With<Ground>>) {
+                // ground_query: Query<&Biome>) {
+                query: Query<&TileObj>) {
+    // ground_query: Query<&GlobalTransform, With<Ground>>) {
     // cursor position
     // https://bevyengine.org/examples/ui-user-interface/relative-cursor-position/
     if keyboard_input.just_pressed(KeyCode::Enter) {
-        info!("Space pressed");
+        info!("Enter pressed");
         // test out things here
-
+        println!("Len of ground tile objects: {}", query.iter().len());
         // get and print out all Tile Ids?
-        for trans in &ground_query {
-            info!("Trans: {:?}", trans);
+        let mut i = 0;
+        for trans in &query {
+            // info!("Trans: id: {:?} biome: {}", trans.id, trans.biome);
+            i += 1;
         }
+        println!("Count of ground objects: {}", i);
+
+        // Do a camera raycast
+        info!("Do a raycast from camera");
+        let (camera, camera_transform) = camera_query.single();
+        // let ground = query.single();
+
+        let Some(cursor_position) = windows.single().cursor_position() else {
+            return;
+        };
+        info!("Cursor position: {:?}", cursor_position);
+        // Calculate a ray pointing from the camera into the world based on the cursor's position.
+        let Some(ray) = camera.viewport_to_world(camera_transform, cursor_position) else {
+            return;
+        };
+        info!("Ray is: {:?}", ray);
+
+        // Draw a circle just above the ground plane at that position.
+        // gizmos.circle(point + ground.up() * 0.01, ground.up(), 0.2, Color::WHITE);
     }
 }
 
@@ -311,7 +383,7 @@ fn draw_cursor(
 
     // Calculate if and where the ray is hitting the ground plane.
     // let Some(distance) =
-    // ray.intersect_plane(ground.translation(), plane)
+    // ray.intersect_plane(ground.translation(), ground)
     //     //ray.intersect_plane(ground.translation(), InfinitePlane3d::new(ground.up()))
     // else {
     //     return;
@@ -322,12 +394,16 @@ fn draw_cursor(
     // gizmos.circle(point + ground.up() * 0.01, ground.up(), 0.2, Color::WHITE);
 }
 
-fn write_to_json_file(polyhedron: Polyhedron, path: &Path) {
-    let mut json_file = File::create(path).expect("Can't create file");
-    let json = serde_json::to_string(&polyhedron).expect("Problem serializing");
-    json_file
-        .write_all(json.as_bytes())
-        .expect("Can't write to file");
+#[derive(Component, Debug)]
+pub struct TileObj {
+    pub id: u32,
+    pub biome: String,
+}
+
+impl TileObj {
+    pub fn new(id: u32, biome: String) -> Self {
+        Self { id, biome }
+    }
 }
 
 // Tile struct wrapper

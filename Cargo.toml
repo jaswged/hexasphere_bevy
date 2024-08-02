@@ -4,16 +4,17 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-bevy = "0.13.2"
+bevy = "0.14.0"
 serde = { version = "1.0.203", features = ["derive"] }
 serde_json = "1.0.120"
-icosahedron = "0.1.1"
-hexasphere = { features = ["adjacency"], git = "https://github.com/OptimisticPeach/hexasphere.git" } # version = "14.0.0"
+#icosahedron = "0.1.1"
+#hexasphere = { features = ["adjacency"], git = "https://github.com/OptimisticPeach/hexasphere.git" } # version = "14.0.0"
 rand = "0.8.5"
-cgmath = { version = "0.17.0", features = ["serde"] }
-bevy_panorbit_camera = "0.18.2"
-rehexed = "0.1.1"
+cgmath = { version = "0.18.0", features = ["serde"] }
+bevy_panorbit_camera = "0.19.1"
+#rehexed = "0.1.1"
 uuid = {version="1.10.0", features=["fast-rng"]}
+#bevy_mod_picking = version = "0.20.1"
 
 # Enable a small amount of optimization in debug mode.
 [profile.dev]
