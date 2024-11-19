@@ -19,6 +19,7 @@ use bevy::render::mesh::VertexAttributeValues;
 use bevy_panorbit_camera::{PanOrbitCamera, PanOrbitCameraPlugin};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
+use bevy_mod_billboard::prelude::*;
 
 // region from mouse to tile example
 #[derive(Debug, Resource)]
@@ -104,6 +105,7 @@ fn main() {
         )
         // 3rd party plugins
         .add_plugins(PanOrbitCameraPlugin)
+        .add_plugins(BillboardPlugin)
         // Our plugins
         .add_systems(Startup, setup)
         .add_systems(First, (update_cursor_pos).chain())
@@ -153,6 +155,7 @@ fn setup(mut commands: Commands,
     // println!("{:?}", json_data);
     // println!("Object 0: {}\n has [0][1]: {}", json_data["tiles"][0], json_data["tiles"][0][1]);
     println!("Object 0: {:?}\n has [0][1]: {:?}", p.tiles[0], p.tiles[0].center_point);
+    let fira_sans_regular_handle = asset_server.load("fonts/FiraCodeNerdFontPropo-Regular.ttf");
 
     for tile in p.tiles {  // Vec<Tile>
         let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::RENDER_WORLD); //, RenderAssetUsages::new() 13.2
@@ -260,6 +263,32 @@ fn setup(mut commands: Commands,
           // TileObj::new(tile.guid, "col".to_string()),
          ),
         ).id();
+
+        // Spawn text label
+        commands.spawn(BillboardTextBundle {
+            transform: Transform::from_translation(center) //Vec3::new(0., 2., 0.))
+                .with_scale(Vec3::splat(0.085)),
+            text: Text::from_sections([
+                TextSection {
+                    value: "IMPORTANT".to_string(),
+                    style: TextStyle {
+                        font_size: 60.0,
+                        font: fira_sans_regular_handle.clone(),
+                        color: Color::WHITE,
+                    }
+                },
+                TextSection {
+                    value: " text".to_string(),
+                    style: TextStyle {
+                        font_size: 60.0,
+                        font: fira_sans_regular_handle.clone(),
+                        color: Color::WHITE,
+                    }
+                }
+            ])
+                //.with_alignment(TextAlignment::CENTER),
+            ,..default()
+        });
 
         // todo put ent into an array to hold all tiles? or HashMap<Hex, Entity>
         // insert entity id into a hashmap of all tiles?
